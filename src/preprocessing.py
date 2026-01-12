@@ -55,12 +55,12 @@ reformat_as_memmap(df,
 
 
 # load and basic cleaning
-record_list = pd.read_csv('record_list.csv') 
+record_list = pd.read_csv('record_list.csv')
 record_list['data'] = record_list.index
-patients = pd.read_csv('patients.csv.gz', compression='gzip') 
+patients = pd.read_csv('patients.csv.gz', compression='gzip')
 record_list = record_list.merge(patients[['subject_id','gender','anchor_age']], on='subject_id')
 record_list['gender'] = record_list['gender'].apply(lambda x: 1 if x=='M' else 0)
-df_labtitles = pd.read_csv('d_labitems.csv.gz', compression='gzip') 
+df_labtitles = pd.read_csv('d_labitems.csv.gz', compression='gzip')
 df_labevents = pd.read_csv('labevents.csv.gz', compression='gzip', low_memory=False)
 df_labs = pd.merge(df_labevents, df_labtitles, on='itemid')
 df_labevents = None
@@ -73,8 +73,8 @@ record_list['ecg_time'] = pd.to_datetime(record_list['ecg_time'])
 df_labs['charttime'] = pd.to_datetime(df_labs['charttime'])
 
 # add ecg features
-machine_measurements_dic = pd.read_csv('machine_measurements_data_dictionary.csv') 
-machine_measurements = pd.read_csv('machine_measurements.csv') 
+machine_measurements_dic = pd.read_csv('machine_measurements_data_dictionary.csv')
+machine_measurements = pd.read_csv('machine_measurements.csv')
 machine_measurements = machine_measurements[['study_id','rr_interval','p_onset','p_end','qrs_onset','qrs_end','t_end','p_axis','qrs_axis','t_axis']]
 record_list = record_list.merge(machine_measurements, on='study_id')
 
@@ -98,9 +98,9 @@ def map_race(row):
     else:
         return 'other'
     
-df_hosp_admission = pd.read_csv('/user/leal6863/Groningen/mimic_preprocess/admissions.csv.gz')
+df_hosp_admission = pd.read_csv('admissions.csv.gz')
 df_hosp_admission['race_mapped'] = df_hosp_admission['race'].apply(map_race)
-df_ed_admissions = pd.read_csv('edstays.csv.gz') 
+df_ed_admissions = pd.read_csv('edstays.csv.gz')
 df_ed_admissions['race_mapped'] = df_ed_admissions['race'].apply(map_race)
 df_hosp_admission_filtered = df_hosp_admission[['subject_id', 'race_mapped']]
 df_ed_admissions_filtered = df_ed_admissions[['subject_id', 'race_mapped']]
@@ -109,8 +109,8 @@ df_unique_subjects = df_combined.drop_duplicates(subset='subject_id').reset_inde
 record_list = record_list.merge(df_unique_subjects, on='subject_id', how='left')
 record_list.rename(columns={'race_mapped': 'race'}, inplace=True)
 
-# stratification based on diagnoses, gender, age
-df_diags = pd.read_csv('records_w_diag_icd10.csv')
+
+df_diags = pd.read_csv('records_w_diag_icd10.csv') 
 record_list = record_list.merge(df_diags[['study_id','strat_fold']], on='study_id', how='left')
 
 # adjust these units
@@ -169,7 +169,6 @@ for lab in tqdm(df_labs['label'].unique()):
 df_labs = pd.concat(new_rows, ignore_index=True)
 
 
-
 label_classes = {}
 for label in tqdm(sorted(df_labs['label'].unique())):
     unique_classes = df_labs[df_labs['label'] == label]['class'].unique()
@@ -177,10 +176,8 @@ for label in tqdm(sorted(df_labs['label'].unique())):
 
 all_final_labels = [f"{label}_{cls}" for label, classes in label_classes.items() for cls in classes]
 
-
 lbl_itos_estimation = all_final_labels
-lbl_itos_monitoring = all_final_labels 
-
+lbl_itos_monitoring = all_final_labels
 
 # ECG feaures cleaning
 
@@ -197,44 +194,30 @@ record_list.loc[(record_list['qrs_end'] < 0) | (record_list['qrs_end'] > 5000), 
 record_list.loc[(record_list['t_end'] < 0) | (record_list['t_end'] > 5000), 't_end'] = np.nan
 record_list.loc[(record_list['rr_interval'] < 0) | (record_list['rr_interval'] > 5000), 'rr_interval'] = np.nan
 
+
 save_path = 'saved_data/'
 os.makedirs(save_path, exist_ok=True)
-
 np.save('saved_data/lbl_itos_estimation.npy', lbl_itos_estimation)
 np.save('saved_data/lbl_itos_monitoring.npy', lbl_itos_monitoring)
-
 df_labs.to_pickle('saved_data/df_labs.pkl')
 record_list.to_pickle('saved_data/record_list.pkl')
-
-
-
-figures_dir = "saved_labs_patients"
-os.makedirs(figures_dir, exist_ok=True)
-
 
 # saves computations
 for patient in tqdm(df_labs['subject_id'].unique()):
     df_lab_patient = df_labs[df_labs['subject_id']==patient]
     df_lab_patient.to_pickle(f'saved_labs_patients/{patient}.pkl')
-    
-    
-    
+
 df_labs = pd.read_pickle('saved_data/df_labs.pkl')
 record_list = pd.read_pickle('saved_data/record_list.pkl')
 lbl_itos_estimation = np.load('saved_data/lbl_itos_estimation.npy')
 lbl_itos_monitoring = np.load('saved_data/lbl_itos_monitoring.npy')
-
-
-
 
 dummies = pd.get_dummies(record_list['race'].astype(str), prefix='race', dummy_na=False)
 record_list = pd.concat([record_list, dummies], axis=1)
 record_list.loc[record_list['race'].isna(), dummies.columns] = np.nan
 record_list.drop(['race','race_nan'], axis=1, inplace=True)
 
-
-
-df_vital = pd.read_csv('vitalsign.csv.gz') 
+df_vital = pd.read_csv('vitalsign.csv.gz')
 df_vital['charttime'] = pd.to_datetime(df_vital['charttime'])
 df_vital = df_vital.iloc[:,:-2]
 df_vital = df_vital[df_vital['subject_id'].isin(record_list['subject_id'].unique())]
@@ -248,8 +231,6 @@ df_vital.loc[df_vital['o2sat'] < 0, 'o2sat'] = np.nan # can't be negative nor mo
 df_vital.loc[df_vital['dbp'] > 500, 'dbp'] = np.nan # max recorded 370
 df_vital.loc[df_vital['sbp'] > 500, 'sbp'] = np.nan # max recorded 360
 
-
-
 def closest_non_nan(series, times, ecg_time):
     """ Return the closest non-NaN value in the series to ecg_time, or NaN if all values are NaN """
     non_nan_series = series.dropna()
@@ -259,47 +240,44 @@ def closest_non_nan(series, times, ecg_time):
     closest_index = time_diffs.idxmin()
     return non_nan_series.loc[closest_index]
 
-    out_temperature = []
-    out_heartrate = []
-    out_resprate = []
-    out_o2sat = []
-    out_dbp = []
-    out_sbp = []
+out_temperature = []
+out_heartrate = []
+out_resprate = []
+out_o2sat = []
+out_dbp = []
+out_sbp = []
 
-    for _, row in tqdm(record_list.iterrows(), total=len(record_list)):
-        patient = row['subject_id']
-        ecg_time = row['ecg_time']
-        df_patient = df_vital[df_vital['subject_id'] == patient]
+for _, row in tqdm(record_list.iterrows(), total=len(record_list)):
+    patient = row['subject_id']
+    ecg_time = row['ecg_time']
+    df_patient = df_vital[df_vital['subject_id'] == patient]
+    
+    df_patient_within = df_patient.loc[(df_patient['charttime'] >= (ecg_time - pd.Timedelta(minutes=30))) & 
+                                       (df_patient['charttime'] <= (ecg_time + pd.Timedelta(minutes=30)))]
+    
+    if df_patient_within.empty:
+        out_temperature.append(np.nan)
+        out_heartrate.append(np.nan)
+        out_resprate.append(np.nan)
+        out_o2sat.append(np.nan)
+        out_dbp.append(np.nan)
+        out_sbp.append(np.nan)
+    else:
+        charttimes = df_patient_within['charttime']
+        temperature = closest_non_nan(df_patient_within['temperature'], charttimes, ecg_time)
+        heartrate = closest_non_nan(df_patient_within['heartrate'], charttimes, ecg_time)
+        resprate = closest_non_nan(df_patient_within['resprate'], charttimes, ecg_time)
+        o2sat = closest_non_nan(df_patient_within['o2sat'], charttimes, ecg_time)
+        sbp = closest_non_nan(df_patient_within['sbp'], charttimes, ecg_time)
+        dbp = closest_non_nan(df_patient_within['dbp'], charttimes, ecg_time)
+        
+        out_temperature.append(temperature)
+        out_heartrate.append(heartrate)
+        out_resprate.append(resprate)
+        out_o2sat.append(o2sat)
+        out_dbp.append(dbp)
+        out_sbp.append(sbp)
 
-        df_patient_within = df_patient.loc[(df_patient['charttime'] >= (ecg_time - pd.Timedelta(minutes=30))) & 
-                                           (df_patient['charttime'] <= (ecg_time + pd.Timedelta(minutes=30)))]
-
-        if df_patient_within.empty:
-            out_temperature.append(np.nan)
-            out_heartrate.append(np.nan)
-            out_resprate.append(np.nan)
-            out_o2sat.append(np.nan)
-            out_dbp.append(np.nan)
-            out_sbp.append(np.nan)
-        else:
-            charttimes = df_patient_within['charttime']
-            temperature = closest_non_nan(df_patient_within['temperature'], charttimes, ecg_time)
-            heartrate = closest_non_nan(df_patient_within['heartrate'], charttimes, ecg_time)
-            resprate = closest_non_nan(df_patient_within['resprate'], charttimes, ecg_time)
-            o2sat = closest_non_nan(df_patient_within['o2sat'], charttimes, ecg_time)
-            sbp = closest_non_nan(df_patient_within['sbp'], charttimes, ecg_time)
-            dbp = closest_non_nan(df_patient_within['dbp'], charttimes, ecg_time)
-
-            out_temperature.append(temperature)
-            out_heartrate.append(heartrate)
-            out_resprate.append(resprate)
-            out_o2sat.append(o2sat)
-            out_dbp.append(dbp)
-            out_sbp.append(sbp)
-
-
-            
-            
 record_list['temperature'] = out_temperature
 record_list['heartrate'] = out_heartrate
 record_list['resprate'] = out_resprate
@@ -307,14 +285,7 @@ record_list['o2sat'] = out_o2sat
 record_list['dbp'] = out_dbp
 record_list['sbp'] = out_sbp
 
-
-
-
-
-
-
-
-omr = pd.read_csv('omr.csv.gz') 
+omr = pd.read_csv('omr.csv.gz')
 omr['result_value'] = pd.to_numeric(omr['result_value'], errors='coerce')
 omr['chartdate'] = pd.to_datetime(omr['chartdate'])
 omr = omr[omr['result_name'].isin(['BMI (kg/m2)','Height (Inches)','Weight (Lbs)'])]
@@ -387,8 +358,6 @@ record_list['bmi'] = out_bmi
 record_list['weight'] = out_weight
 record_list['height'] = out_height
 
-
-
 record_list.to_pickle('saved_data/record_list_updated.pkl')
 record_list = pd.read_pickle('saved_data/record_list_updated.pkl')
 
@@ -403,9 +372,7 @@ def save_results(index, out_estimation, out_monitoring30, out_monitoring60, out_
     with open(f'saved_data/out_monitoring120_{index}.pkl', 'wb') as f:
         pkl.dump(out_monitoring120, f)
         
-        
-        
-        
+
 out_estimation = []
 out_monitoring30 = []
 out_monitoring60 = []
@@ -520,11 +487,11 @@ for index, record_row in tqdm(enumerate(record_list.itertuples()), total=len(rec
         out_monitoring30 = []
         out_monitoring60 = []
         out_monitoring120 = []
-
-# Save remaining data if any
-if out_estimation:
+        
+        
+# Save remaining data if any. 
+if out_estimation: 
     save_results('final', out_estimation, out_monitoring30, out_monitoring60, out_monitoring120)
-    
     
     
 suffixes = [i+'.pkl' for i in [str(i) for i in np.arange(50000,800000,50000)] + ['final']]
@@ -533,7 +500,6 @@ files_estimation = ['saved_data/out_estimation_'] * 16
 files_monitoring30 = ['saved_data/out_monitoring30_'] * 16
 files_monitoring60 = ['saved_data/out_monitoring60_'] * 16
 files_monitoring120 = ['saved_data/out_monitoring120_'] * 16
-
 
 files_estimation = [f+s for f,s in zip(files_estimation, suffixes)]
 files_monitoring30 = [f+s for f,s in zip(files_monitoring30, suffixes)]
@@ -558,7 +524,6 @@ record_list['label_monitoring60'] = out_monitoring60
 record_list['label_monitoring120'] = out_monitoring120
 
 lbl_itos = np.load('saved_data/lbl_itos_monitoring.npy')
-
 
 def get_to_drop(column_name, lbl_itos):
 
@@ -596,6 +561,7 @@ def get_to_drop(column_name, lbl_itos):
             lbls_to_drop.append(lbl)
             index_to_drop.append(i)
             
+    print(len(lbls_to_drop), len(index_to_drop))
     
     return lbls_to_drop, index_to_drop
 
@@ -604,7 +570,6 @@ lbls_to_drop_estimation, index_to_drop_estimation = get_to_drop('label_estimatio
 lbls_to_drop_monitoring30, index_to_drop_monitoring30 = get_to_drop('label_monitoring30', lbl_itos)
 lbls_to_drop_monitoring60, index_to_drop_monitoring60 = get_to_drop('label_monitoring60', lbl_itos)
 lbls_to_drop_monitoring120, index_to_drop_monitoring120 = get_to_drop('label_monitoring120', lbl_itos)
-
 
 lbls_to_keep_estimation = [i for i in lbl_itos if i not in lbls_to_drop_estimation]
 lbls_to_keep_monitoring30 = [i for i in lbl_itos if i not in lbls_to_drop_monitoring30]
@@ -632,10 +597,14 @@ record_list.drop(['label_estimation',
                   'label_monitoring120'], axis=1, inplace=True)
 
 np.save('saved_data/lbl_itos_estimation.npy', lbls_to_keep_estimation)
+
 np.save('saved_data/lbl_itos_monitoring30.npy', lbls_to_keep_monitoring30)
 np.save('saved_data/lbl_itos_monitoring60.npy', lbls_to_keep_monitoring60)
 np.save('saved_data/lbl_itos_monitoring120.npy', lbls_to_keep_monitoring120)
 
+df_diags = pd.read_csv('records_w_diag_icd10.csv') # load
+record_list = record_list.merge(df_diags[['study_id','ecg_no_within_stay']], on='study_id')
+df_diags=None
 
 def has_valid_element(lst):
     return any(x != -999 for x in lst)
@@ -648,23 +617,67 @@ filtered_record_list = record_list[
 ]
 
 record_list = None
+
 def aggregate_lists(row):
     return row['final_label_estimation'] + row['final_label_monitoring30'] + row['final_label_monitoring60'] + row['final_label_monitoring120']
 
 filtered_record_list['aggregated_label'] = filtered_record_list.apply(aggregate_lists, axis=1)
+
+filtered_record_list.to_pickle('saved_data/df_memmap.pkl')
+df_memmap = pd.read_pickle('saved_data/df_memmap.pkl')
+
+lbls_to_keep_estimation = np.load('saved_data/lbl_itos_estimation.npy', allow_pickle=True)
+lbls_to_keep_monitoring30 = np.load('saved_data/lbl_itos_monitoring30.npy', allow_pickle=True)
+lbls_to_keep_monitoring60 = np.load('saved_data/lbl_itos_monitoring60.npy', allow_pickle=True)
+lbls_to_keep_monitoring120 = np.load('saved_data/lbl_itos_monitoring120.npy', allow_pickle=True)
+
+# Combine all labels into a single list
+all_labels = (
+    list(lbls_to_keep_estimation) +
+    list(lbls_to_keep_monitoring30) +
+    list(lbls_to_keep_monitoring60) +
+    list(lbls_to_keep_monitoring120)
+)
+
+# Extract the first part before '_'
+first_parts = [label.split('_')[0] for label in all_labels]
+second_parts = [label.split('_')[1] for label in all_labels]
+
+# Count unique values
+unique_first_parts = set(first_parts)
+
+features_cols = ['gender', 'anchor_age', 'race_asian', 'race_black', 'race_hispanic', 'race_other', 'race_white',
+                 'temperature', 'heartrate', 'resprate', 'o2sat', 'sbp', 'dbp',
+                 'bmi', 'weight', 'height']
+
+# Add mask columns to indicate missing values
+for col in features_cols:
+    mask_col = col + '_m'
+    filtered_record_list[mask_col] = filtered_record_list[col].notna().astype(float)
+
+# Filter rows corresponding to training folds (strat_fold values 0 to 17)
+train_folds = filtered_record_list[filtered_record_list['strat_fold'].between(0, 17)]
+
+# Compute medians from the training folds
+median_values = train_folds[features_cols].median()
+
+# Impute missing values in all rows using the computed medians
+filtered_record_list[features_cols] = filtered_record_list[features_cols].fillna(median_values)
+
+# Combine features and mask columns
+features_cols_withmask = [col + '_m' for col in features_cols]
+all_features = features_cols + features_cols_withmask
+
 
 filtered_record_list.drop(['final_label_estimation',
                            'final_label_monitoring30', 
                            'final_label_monitoring60',
                            'final_label_monitoring120'], axis=1, inplace=True)
 
-
-
-
 np.save('saved_data/all_features.npy', all_features)
 filtered_record_list.to_pickle('saved_data/df_memmap.pkl')
 
-
+np.save('saved_data/lbl_itos.npy', all_labels)
 
 df_memmap = pd.read_pickle('saved_data/df_memmap.pkl')
 
@@ -682,22 +695,3 @@ for col in features_cols:
 mask_cols = [col + '_m' for col in features_cols]
 df_memmap = df_memmap.drop(columns=mask_cols)
 df_memmap.to_pickle('saved_data/df_memmap.pkl')
-
-lbls_to_keep_estimation = np.load('saved_data/lbl_itos_estimation.npy', allow_pickle=True)
-lbls_to_keep_monitoring30 = np.load('saved_data/lbl_itos_monitoring30.npy', allow_pickle=True)
-lbls_to_keep_monitoring60 = np.load('saved_data/lbl_itos_monitoring60.npy', allow_pickle=True)
-lbls_to_keep_monitoring120 = np.load('saved_data/lbl_itos_monitoring120.npy', allow_pickle=True)
-
-lbls_to_keep_estimation = [i+'_est' for i in lbls_to_keep_estimation]
-lbls_to_keep_monitoring30 = [i+'_mon30' for i in lbls_to_keep_monitoring30]
-lbls_to_keep_monitoring60 = [i+'_mon60' for i in lbls_to_keep_monitoring60]
-lbls_to_keep_monitoring120 = [i+'_mon120' for i in lbls_to_keep_monitoring120]
-
-# Concatenate the arrays
-all_labels = np.concatenate((lbls_to_keep_estimation, 
-                             lbls_to_keep_monitoring30, 
-                             lbls_to_keep_monitoring60, 
-                             lbls_to_keep_monitoring120))
-
-
-np.save('saved_data/lbl_itos.npy', all_labels)
